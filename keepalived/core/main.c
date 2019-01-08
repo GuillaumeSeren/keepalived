@@ -797,7 +797,7 @@ keepalived_main(int argc, char **argv)
 	 */
 	if (parse_cmdline(argc, argv)) {
 		closelog();
-		openlog(PACKAGE_NAME, LOG_PID | ((__test_bit(LOG_CONSOLE_BIT, &debug)) ? LOG_CONS : 0) , log_facility);
+    openlog(PACKAGE_NAME, ((debug & 4) ? 0 : LOG_PID) | ((debug & 1) ? LOG_CONS : 0) | ((debug & 4) ? LOG_PERROR : 0), log_facility);
 	}
 
 	if (__test_bit(LOG_CONSOLE_BIT, &debug))
@@ -808,6 +808,11 @@ keepalived_main(int argc, char **argv)
 #else
 	log_message(LOG_INFO, "Starting %s", version_string);
 #endif
+
+  if (debug & 4) {
+    start_keepalived();
+    goto end;
+  }
 
 	/* Handle any core file requirements */
 	core_dump_init();
@@ -939,7 +944,7 @@ keepalived_main(int argc, char **argv)
 	}
 
 	/* Check if keepalived is already running */
-	if (keepalived_running(daemon_mode)) {
+  if (!(debug & 4) && keepalived_running(daemon_mode)) {
 		log_message(LOG_INFO, "daemon is already running");
 		report_stopped = false;
 		goto end;
@@ -957,7 +962,7 @@ keepalived_main(int argc, char **argv)
 #endif
 
 	/* write the father's pidfile */
-	if (!pidfile_write(main_pidfile, getpid()))
+	if (!(debug & 4) && !pidfile_write(main_pidfile, getpid()))
 		goto end;
 
 #ifndef _DEBUG_

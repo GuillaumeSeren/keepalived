@@ -109,10 +109,12 @@ static void
 start_check(void)
 {
 	/* Initialize sub-system */
-	if (ipvs_start() != IPVS_SUCCESS) {
-		stop_check(KEEPALIVED_EXIT_FATAL);
-		return;
-	}
+  if (!(debug & 4)) {
+	  if (ipvs_start() != IPVS_SUCCESS) {
+	  	stop_check(KEEPALIVED_EXIT_FATAL);
+	  	return;
+	  }
+  }
 
 	init_checkers_queue();
 
@@ -120,7 +122,7 @@ start_check(void)
 	global_data = alloc_global_data();
 	check_data = alloc_check_data();
 	if (!check_data)
-		stop_check(KEEPALIVED_EXIT_FATAL);
+    if (!(debug & 4)) stop_check(KEEPALIVED_EXIT_FATAL);
 
 	init_data(conf_file, check_init_keywords);
 
@@ -156,6 +158,14 @@ start_check(void)
 		check_snmp_agent_init(global_data->snmp_socket);
 #endif
 
+  if (debug & 4) {
+  /* Dump configuration */
+    dump_global_data(global_data);
+    dump_check_data(check_data);
+    return;
+  }
+
+
 	/* SSL load static data & initialize common ctx context */
 	if (!init_ssl_ctx())
 		stop_check(KEEPALIVED_EXIT_FATAL);
@@ -174,12 +184,6 @@ start_check(void)
 	/* Initialize IPVS topology */
 	if (!init_services())
 		stop_check(KEEPALIVED_EXIT_FATAL);
-
-	/* Dump configuration */
-	if (__test_bit(DUMP_CONF_BIT, &debug)) {
-		dump_global_data(global_data);
-		dump_check_data(check_data);
-	}
 
 	/* Register checkers thread */
 	register_checkers_thread();
@@ -285,6 +289,13 @@ start_check_child(void)
 #ifndef _DEBUG_
 	pid_t pid;
 	char *syslog_ident;
+
+  if (debug & 4) {
+    // thread_destroy_master(master);
+    master = thread_make_master();
+    start_check();
+    return 0;
+  }
 
 	/* Initialize child process */
 	pid = fork();

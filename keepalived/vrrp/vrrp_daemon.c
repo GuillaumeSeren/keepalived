@@ -140,13 +140,14 @@ stop_vrrp(int status)
 
 	kernel_netlink_close();
 	thread_destroy_master(master);
-	gratuitous_arp_close();
-	ndisc_close();
-
+  if (!(debug & 4)) {
+    gratuitous_arp_init();
+    ndisc_init();
 #ifdef _WITH_DBUS_
 	if (global_data->enable_dbus)
 		dbus_stop();
 #endif
+  }
 
 	free_global_data(global_data);
 	free_vrrp_data(vrrp_data);
@@ -179,15 +180,13 @@ start_vrrp(void)
 	/* Initialize sub-system */
 	init_interface_queue();
 	kernel_netlink_init();
-	gratuitous_arp_init();
-	ndisc_init();
 
 	global_data = alloc_global_data();
 
 	/* Parse configuration file */
 	vrrp_data = alloc_vrrp_data();
 	if (!vrrp_data) {
-		stop_vrrp(KEEPALIVED_EXIT_FATAL);
+    if (!(debug & 4)) stop_vrrp(KEEPALIVED_EXIT_FATAL);
 		return;
 	}
 
@@ -216,10 +215,12 @@ start_vrrp(void)
 #ifdef _WITH_LVS_
 	if (vrrp_ipvs_needed()) {
 		/* Initialize ipvs related */
-		if (ipvs_start() != IPVS_SUCCESS) {
-			stop_vrrp(KEEPALIVED_EXIT_FATAL);
-			return;
-		}
+    if (!(debug & 4)) {
+		  if (ipvs_start() != IPVS_SUCCESS) {
+		  	stop_vrrp(KEEPALIVED_EXIT_FATAL);
+		  	return;
+		  }
+    }
 
 		/* Set LVS timeouts */
 		if (global_data->lvs_tcp_timeout ||
@@ -235,7 +236,7 @@ start_vrrp(void)
 	}
 #endif
 
-	if (reload) {
+  if (!(debug & 4) && reload) {
 		clear_diff_saddresses();
 #ifdef _HAVE_FIB_ROUTING_
 		clear_diff_srules();
@@ -261,7 +262,7 @@ start_vrrp(void)
 #endif
 
 	/* Complete VRRP initialization */
-	if (!vrrp_complete_init()) {
+  if (!(debug & 4) && !vrrp_complete_init()) {
 		stop_vrrp(KEEPALIVED_EXIT_CONFIG);
 		return;
 	}
@@ -285,8 +286,6 @@ start_vrrp(void)
 	log_message(LOG_INFO, "Configuration is using : %zu Bytes", mem_allocated);
 #endif
 
-	/* Set static entries */
-	netlink_iplist(vrrp_data->static_addresses, IPADDRESS_ADD);
 #ifdef _HAVE_FIB_ROUTING_
 	netlink_rtlist(vrrp_data->static_routes, IPROUTE_ADD);
 	netlink_rulelist(vrrp_data->static_rules, IPRULE_ADD, false);
@@ -303,6 +302,7 @@ start_vrrp(void)
 			dump_list(ifl);
 
 		clear_rt_names();
+    return;
 	}
 
 	/* Initialize linkbeat */
@@ -510,7 +510,7 @@ start_vrrp_child(void)
 	free_parent_mallocs_startup(true);
 
 	/* Child process part, write pidfile */
-	if (!pidfile_write(vrrp_pidfile, getpid())) {
+	if (!pidfile_write(vrrp_pidfile, getpid()) && !(debug & 4)) {
 		/* Fatal error */
 		log_message(LOG_INFO, "VRRP child process: cannot write pidfile");
 		exit(0);
